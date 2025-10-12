@@ -7,7 +7,9 @@ As a user, when I'm in any file/buffer, I can invoke =copilot/new= and I will be
 ** Existing session
 As a user, when I invoke =copilot/new= from an existing copilot buffer, it should resume the session, adding new prompts and ai messages.
 ** Feedback
-As a user, I want to see immediate feedback in the copilot buffer. Tool uses (just the names) should be ouput to the AI block as well as the full responses.
+As a user, I want to see immediate feedback and ongoing in the copilot buffer. The output should be streamed to the AI block. When the prompt is complete, then it should be clear that it is done.
+** Project parity
+As a user, I want copilot to be launched from the project root as reported by projectile. If no project root is found then it should default to the current default directory. 
 ** Safeguards
 Using a variable, I should be able to define my own safeguards.
 ** Configuration
