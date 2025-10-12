@@ -75,10 +75,12 @@
           (copilot--truncate-words prompt 10)))
 
 (defun copilot--current-session-id (buffer)
-  (org-entry-get (point) "copilot--session-id"))
+  (with-current-buffer buffer
+      (org-entry-get (point) "copilot--session-id")))
 
-(defun copilot--set-session-id (id)
-  (org-set-property "copilot--session-id" id))
+(defun copilot--set-session-id (buffer id)
+  (with-current-buffer buffer
+    (org-set-property "copilot--session-id" id)))
 
 (defun copilot--insert-new-user-prompt (prompt)
   (goto-char (point-max))
@@ -125,9 +127,8 @@
         (extra copilot-cli-extra-args))
     (append base
             (list "--log-dir" log-dir)
-            (if resume-id
-                (list "-p" prompt "--model" copilot-cli-model "--allow-all-tools" "--resume" resume-id)
-              (list "-p" prompt "--model" copilot-cli-model "--allow-all-tools"))
+	    (list "-p" prompt "--model" copilot-cli-model "--allow-all-tools")
+            (if resume-id (list "--resume" resume-id))
             deny dirs extra)))
 
 (defun copilot--process-filter (proc chunk)
@@ -167,7 +168,7 @@
                                           (sid (and ld (copilot--discover-session-id ld))))
                                      (when sid
                                        (process-put p 'copilot-session-id sid)
-                                       (copilot--set-session-id sid))))))
+                                       (copilot--set-session-id buf sid))))))
     proc))
 
 (defun copilot--prepare-buffer (prompt)
@@ -177,8 +178,8 @@
       (org-mode)
       (setq buffer-read-only t)
       (let ((inhibit-read-only t))
-        (insert (format "#+title: %s\n" ts))
-        (insert (format "# Prompt: %s\n" prompt))
+        (insert (format "#+title: %s\n\n\n" ts))
+        (insert (format "%s\n\n" prompt))
         (copilot--ensure-ai-block))
       buf)))
 
