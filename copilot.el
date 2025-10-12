@@ -13,10 +13,9 @@
 ;; Notes:
 ;; - Streaming is implemented via a process filter that appends to the
 ;;   current AI block.
-;; - Session id is heuristically extracted from process output using
-;;   regexp `copilot--session-id-regexp'.  If none is found we fabricate
-;;   one (buffer-local) so resume still works (albeit without a real
-;;   server session).
+;; - Session id is extracted from the name of the single log file created
+;;   in a temporary --log-dir for the process. After process exit we look
+;;   for *.log and record '# Session: <id>' near top of buffer.
 ;; - Safeguards: variable `copilot-cli-safeguard-function' can validate
 ;;   or transform the prompt before it is sent.  Should signal `user-error'
 ;;   to abort.
@@ -53,8 +52,9 @@
   "Function called with prompt. Return prompt (maybe modified) or signal to abort."
   :type '(choice (const :tag "None" nil) function))
 
-(defvar-local copilot--session-id nil)
-(defconst copilot--session-id-regexp "Session ID: *\([A-Za-z0-9_-]+\)" )
+;; Session id is discovered from the single log file in a temp --log-dir.
+;; Stored in buffer as a global file property '#+property: copilot-session-id <id>'.
+(defvar-local copilot--log-dir nil)
 (defconst copilot--ai-begin "#+begin_ai\n")
 (defconst copilot--ai-end   "#+end_ai\n")
 
@@ -74,22 +74,16 @@
           (file-name-nondirectory (directory-file-name (copilot--project-root)))
           (copilot--truncate-words prompt 10)))
 
-(defun copilot--current-session-id ()
-  (or copilot--session-id
-      (when (derived-mode-p 'org-mode)
-        (save-excursion
-          (goto-char (point-min))
-          (org-entry-get (point) "copilot-session-id")))
-      nil))
+(defun copilot--current-session-id (buffer)
+  (org-entry-get (point) "copilot--session-id"))
 
 (defun copilot--set-session-id (id)
-  (setq copilot--session-id id)
-  (org-set-property "copilot-session-id" id))
+  (org-set-property "copilot--session-id" id))
 
 (defun copilot--insert-new-user-prompt (prompt)
   (goto-char (point-max))
   (unless (bolp) (insert "\n"))
-  (insert (format "* User\n%s\n" prompt)))
+  (insert (format "%s\n" prompt)))
 
 (defun copilot--ensure-ai-block ()
   (goto-char (point-max))
@@ -122,28 +116,24 @@
     (save-excursion
       (goto-char (point-max))
       (unless (bolp) (insert "\n"))
-      (insert "# Done\n"))))
+      (insert "# End\n"))))
 
-(defun copilot--build-command (prompt &optional resume-id)
+(defun copilot--build-command (prompt &optional resume-id log-dir)
   (let ((base (list copilot-cli-command))
         (deny (apply #'append (mapcar (lambda (d) (list "--deny-tool" d)) copilot-cli-deny-tools)))
         (dirs (apply #'append (mapcar (lambda (d) (list "--add-dir" d)) copilot-cli-add-dirs)))
         (extra copilot-cli-extra-args))
     (append base
+            (list "--log-dir" log-dir)
             (if resume-id
-              (list "-p" (format "\"%s\"" prompt) "--model" copilot-cli-model "--allow-all-tools" "--resume" resume-id)
-              (list "-p" (format "\"%s\"" prompt) "--model" copilot-cli-model "--allow-all-tools"))
+                (list "-p" prompt "--model" copilot-cli-model "--allow-all-tools" "--resume" resume-id)
+              (list "-p" prompt "--model" copilot-cli-model "--allow-all-tools"))
             deny dirs extra)))
-
-(copilot--build-command "hello" "123")
 
 (defun copilot--process-filter (proc chunk)
   (when (buffer-live-p (process-buffer proc))
     (with-current-buffer (process-buffer proc)
       (let ((inhibit-read-only t))
-        (unless copilot--session-id
-          (when (string-match copilot--session-id-regexp chunk)
-            (copilot--set-session-id (match-string 1 chunk))))
         (copilot--append-to-ai-block chunk)))))
 
 (defun copilot--process-sentinel (proc event)
@@ -152,14 +142,32 @@
       (with-current-buffer (process-buffer proc)
         (copilot--finalize-ai-block)))))
 
+(defun copilot--make-temp-log-dir ()
+  (make-temp-file "copilot-log-" t))
+
+(defun copilot--discover-session-id (log-dir)
+  (let* ((files (directory-files log-dir nil "\\.log$")))
+    (when (= (length files) 1)
+      (file-name-base (car files)))))
+
 (defun copilot--start-process (prompt resume-id)
   (let* ((default-directory (copilot--project-root))
-         (cmd (copilot--build-command prompt resume-id))
+         (log-dir (or copilot--log-dir
+                      (setq copilot--log-dir (copilot--make-temp-log-dir))))
+         (cmd (copilot--build-command prompt resume-id log-dir))
          (buf (current-buffer))
          (proc (apply #'start-process "copilot-cli" buf cmd)))
     (message (format "Calling copilot like =%s=" cmd))
+    (process-put proc 'copilot-log-dir log-dir)
     (set-process-filter proc #'copilot--process-filter)
-    (set-process-sentinel proc #'copilot--process-sentinel)
+    (set-process-sentinel proc (lambda (p e)
+                                 (copilot--process-sentinel p e)
+                                 (unless (copilot--current-session-id buf)
+                                   (let* ((ld (process-get p 'copilot-log-dir))
+                                          (sid (and ld (copilot--discover-session-id ld))))
+                                     (when sid
+                                       (process-put p 'copilot-session-id sid)
+                                       (copilot--set-session-id sid))))))
     proc))
 
 (defun copilot--prepare-buffer (prompt)
@@ -170,14 +178,13 @@
       (setq buffer-read-only t)
       (let ((inhibit-read-only t))
         (insert (format "#+title: %s\n" ts))
-        (insert "* Chat\n")
-        (copilot--insert-new-user-prompt prompt)
+        (insert (format "# Prompt: %s\n" prompt))
         (copilot--ensure-ai-block))
       buf)))
 
-(defun copilot--resume-buffer-p ()
+(defun copilot--resume-buffer-p (buf)
   (and (derived-mode-p 'org-mode)
-       (copilot--current-session-id)))
+       (copilot--current-session-id buf)))
 
 ;;;###autoload
 (defun copilot/new (prompt)
@@ -187,9 +194,9 @@ session is resumed via --resume.  Otherwise a new chat is started."
   (interactive (list (read-string "Copilot prompt: ")))
   (when copilot-cli-safeguard-function
     (setq prompt (funcall copilot-cli-safeguard-function prompt)))
-  (if (copilot--resume-buffer-p)
+  (if (copilot--resume-buffer-p (current-buffer))
       (let* ((inhibit-read-only t)
-             (sid (copilot--current-session-id)))
+             (sid (copilot--current-session-id (current-buffer))))
         (goto-char (point-max))
         (copilot--insert-new-user-prompt prompt)
         (copilot--ensure-ai-block)
