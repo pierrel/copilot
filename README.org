@@ -1,0 +1,49 @@
+#+title: Copilot in Emacs
+An emacs package to interface with [[https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli][Github Copilot CLI]].
+
+* User stories
+** New session
+As a user, when I'm in any file/buffer, I can invoke =copilot/new= and I will be prompted for my prompt. It will be sent to copilot and a new buffer will open with the date, prompt, and the response in a clear AI block.
+** Existing session
+As a user, when I invoke =copilot/new= from an existing copilot buffer, it should resume the session, adding new prompts and ai messages.
+** Feedback
+As a user, I want to see immediate feedback in the copilot buffer. Tool uses (just the names) should be ouput to the AI block as well as the full responses.
+** Safeguards
+Using a variable, I should be able to define my own safeguards.
+** Configuration
+As a user, I want to control how copilot CLI runs through the use of customizeable variables.
+*** Safeguards
+- I should be able to define =--deny-tool= tools. By default, it should disallow any git usage (=--deny-tool 'shell(git:*)'=).
+- I should be able to define mutliple directories to use with =--add-dir= (one per directory).
+*** Model
+I should be able to define which model it uses. By default this is =gpt-5=.
+* Interface
+The package provides a single entry-point, =copilot/new= which either initiates a new copilot chat or continues an existing one.
+
+For new chats, a buffer is opened with the name =*Copilot [X] - Y*= where:
+- X is the project directory where the copilot session is initiated (as reported by projectile).
+- Y is the first 10 words of the initial query
+
+When invoked for the first time, it will:
+1. Ask for a prompt
+2. Call the copilot CLI with the =-p= parameter as the given prompt, using =gpt-5= as the model, and =--allow-all-tools=
+3. Open a new buffer
+   1. In org mode
+   2. Read-only
+   3. The "#+title" will  be set as the current date
+   4. The "copilot-session-id" property will be set as the copilot session
+   5. The prompt will be placed in the buffer
+   6. The copilot response will be streamed into an "ai" block:
+   #+begin_ai
+      [response]
+   #+end_ai
+
+If invoked from a buffer that has a "copilot-session-id", then it uses the =--resume= with the session ID and puts the new user prompt after the last AI message/block and then begins a new block with the response.
+
+* Coding guidelines
+- Prefer use of =seq-*= and functional style (no =cl= lib if possible).
+- Assume org mode and use org mode function to modify things like properties (title, etc)
+- Always lint using =eldev lint=
+- Write unit tests using ERT, not everything needs to be completely tested.
+- Functions should be as "pure" and as side-effect free as possible. Functions with side effects should be clear that they have side-effects.
+- Write (and re-use) convenience functions
