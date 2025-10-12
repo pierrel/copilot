@@ -57,6 +57,29 @@
 (defvar-local copilot--log-dir nil)
 (defconst copilot--ai-begin "#+begin_ai\n")
 (defconst copilot--ai-end   "#+end_ai\n")
+(defcustom copilot-side-window-width 0.25
+  "Width for the Copilot side window.
+If a float, interpreted as fraction of the current frame width.
+If an integer, interpreted as number of columns.
+Set to nil to disable special side-window display."
+  :type '(choice (float :tag "Fraction of frame width")
+                 (integer :tag "Columns")
+                 (const :tag "Disabled" nil)))
+
+(defun copilot--display-buffer (buf)
+  "Display BUF in a right side window honoring `copilot-side-window-width'.
+Returns the window used."
+  (if (null copilot-side-window-width)
+      (progn (switch-to-buffer buf) (get-buffer-window buf))
+    (let* ((fw (frame-width))
+           (cols (if (floatp copilot-side-window-width)
+                     (max 20 (truncate (* fw copilot-side-window-width)))
+                   copilot-side-window-width)))
+      (display-buffer-in-side-window
+       buf `((side . right)
+             (slot . -1)
+             (window-width . ,cols)
+             (preserve-size . (t . nil)))))) )
 
 (defun copilot--project-root ()
   (cond
@@ -188,6 +211,21 @@
        (copilot--current-session-id buf)))
 
 ;;;###autoload
+(defun copilot/select ()
+  "Select an existing Copilot buffer using standard buffer completion.
+Buffers are recognized by the naming pattern produced by `copilot--buffer-name'.
+If no Copilot buffers exist, signal a user error."
+  (interactive)
+  (let* ((candidates (seq-filter (lambda (b)
+                                   (string-match-p "^\\*Copilot \\[[^]]+\\] - " (buffer-name b)))
+                                 (buffer-list)))
+         (names (mapcar #'buffer-name candidates)))
+    (unless names
+      (user-error "No Copilot buffers"))
+    (let* ((choice (completing-read "Copilot buffer: " names nil t)))
+      (switch-to-buffer choice))))
+
+;;;###autoload
 (defun copilot/new (prompt)
   "Start or continue a Copilot chat session with PROMPT.
 When called from an existing Copilot buffer (has session id), the
@@ -203,7 +241,7 @@ session is resumed via --resume.  Otherwise a new chat is started."
         (copilot--ensure-ai-block)
         (copilot--start-process prompt sid))
     (let ((buf (copilot--prepare-buffer prompt)))
-      (switch-to-buffer buf)
+      (copilot--display-buffer buf)
       (copilot--start-process prompt nil)))
   (message "Copilot: started"))
 

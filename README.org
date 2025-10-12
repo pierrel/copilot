@@ -20,7 +20,9 @@ As a user, I want to control how copilot CLI runs through the use of customizeab
 *** Model
 I should be able to define which model it uses. By default this is =gpt-5=.
 * Interface
-The package provides a single entry-point, =copilot/new= which either initiates a new copilot chat or continues an existing one.
+The package provides entry-points:
+- =copilot/new=: start or continue a Copilot chat session.
+- =copilot/select=: interactively select an existing Copilot buffer.
 
 For new chats, a buffer is opened with the name =*Copilot [X] - Y*= where:
 - X is the project directory where the copilot session is initiated (as reported by projectile).
@@ -32,15 +34,43 @@ When invoked for the first time, it will:
 3. Open a new buffer
    1. In org mode
    2. Read-only
-   3. The "#+title" will  be set as the current date
-   4. The "copilot-session-id" property will be set as the copilot session
-   5. The prompt will be placed in the buffer
-   6. The copilot response will be streamed into an "ai" block:
+   3. Displayed in a right side window (customizable via =copilot-side-window-width=)
+   4. The "#+title" will  be set as the current date
+   5. The "copilot-session-id" property will be set as the copilot session
+   6. The prompt will be placed in the buffer
+   7. The copilot response will be streamed into an "ai" block:
    #+begin_ai
       [response]
    #+end_ai
 
 If invoked from a buffer that has a "copilot-session-id", then it uses the =--resume= with the session ID and puts the new user prompt after the last AI message/block and then begins a new block with the response.
+
+* Installation
+Add this repository to your load path and require it. Example using straight.el:
+#+begin_src emacs-lisp
+(use-package copilot
+  :straight (copilot :type git :host github :repo "example/copilot-emacs")
+  :commands (copilot/new copilot/select)
+  :custom
+  (copilot-cli-command "copilot") ; path to your Copilot CLI
+  (copilot-side-window-width 0.25))
+#+end_src
+
+Or clone locally and add to load-path:
+#+begin_src emacs-lisp
+(add-to-list 'load-path "/path/to/clone/")
+(require 'copilot)
+#+end_src
+
+MELPA (not yet published): once available you could simply:
+#+begin_src emacs-lisp
+(use-package copilot :ensure t)
+#+end_src
+
+* Usage
+1. M-x =copilot/new= -> enter prompt
+2. M-x =copilot/new= again inside the same buffer to continue the session
+3. M-x =copilot/select= to switch among existing Copilot buffers
 
 * Coding guidelines
 - Prefer use of =seq-*= and functional style (no =cl= lib if possible).
