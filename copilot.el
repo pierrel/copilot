@@ -63,16 +63,18 @@ Set to nil to disable special side-window display."
   "Display BUF in a right side window honoring `copilot-side-window-width'.
 Returns the window used."
   (if (null copilot-side-window-width)
-      (progn (switch-to-buffer buf) (get-buffer-window buf))
-    (let* ((fw (frame-width))
-           (cols (if (floatp copilot-side-window-width)
-                     (max 20 (truncate (* fw copilot-side-window-width)))
-                   copilot-side-window-width)))
-      (display-buffer-in-side-window
-       buf `((side . right)
-             (slot . -1)
-             (window-width . ,cols)
-             (preserve-size . (t . nil)))))) )
+      (progn (switch-to-buffer buf)
+	     (get-buffer-window buf))
+    (unless (get-buffer-window buf)
+      (let* ((fw (frame-width))
+             (cols (if (floatp copilot-side-window-width)
+                       (max 20 (truncate (* fw copilot-side-window-width)))
+                     copilot-side-window-width)))
+	(display-buffer-in-side-window
+	 buf `((side . right)
+               (slot . -1)
+               (window-width . ,cols)
+               (preserve-size . (t . nil))))))))
 
 (defun copilot--project-root ()
   (cond
