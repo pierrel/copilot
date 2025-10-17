@@ -158,7 +158,8 @@ Returns the window used."
 (defun copilot--process-filter (proc chunk)
   (when (buffer-live-p (process-buffer proc))
     (with-current-buffer (process-buffer proc)
-      (let ((inhibit-read-only t))
+      (let ((inhibit-read-only t)
+	    (chunk (string-replace "\e]11;?\e\\" "" chunk)))
         (copilot--append-to-ai-block (current-buffer) chunk)))))
 
 (defun copilot--process-sentinel (proc event)
