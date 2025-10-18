@@ -103,14 +103,27 @@ Returns the window used."
 
 (defun copilot--insert-new-user-prompt (buf prompt)
   (with-current-buffer buf
-      (goto-char (point-max))
+    (goto-char (point-max))
+    ;; Ensure two blank lines before a new prompt (after an AI block)
     (unless (bolp) (insert "\n"))
+    (when (looking-back (concat copilot--ai-end "\n\n?") (line-beginning-position))
+      (save-excursion
+        (forward-line -1)))
+    (let ((need (save-excursion
+                  (forward-line 0)
+                  (if (save-excursion (forward-line -1) (looking-at "^$"))
+                      (if (save-excursion (forward-line -2) (looking-at "^$")) 0 1)
+                    2))))
+      (dotimes (_ need) (insert "\n")))
     (insert (format "%s\n" prompt))))
 
 (defun copilot--ensure-ai-block (buf)
   (with-current-buffer buf
     (goto-char (point-max))
+    ;; Ensure exactly one blank line between prompt and AI block
     (unless (bolp) (insert "\n"))
+    (unless (save-excursion (forward-line -1) (looking-at "^$"))
+      (insert "\n"))
     (insert copilot--ai-begin)
     (let ((start (point)))
       (insert "")
@@ -159,7 +172,7 @@ Returns the window used."
   (when (buffer-live-p (process-buffer proc))
     (with-current-buffer (process-buffer proc)
       (let ((inhibit-read-only t)
-	    (chunk (string-replace "\e]11;?\e\\" "" chunk)))
+	    (chunk (string-replace "\e]11;?\e\\" "Thinking...\n" chunk)))
         (copilot--append-to-ai-block (current-buffer) chunk)))))
 
 (defun copilot--process-sentinel (proc event)
@@ -221,7 +234,9 @@ Returns the window used."
 (defun copilot/select ()
   "Select an existing Copilot buffer using standard buffer completion.
 Buffers are recognized by the naming pattern produced by `copilot--buffer-name'.
-If no Copilot buffers exist, signal a user error."
+If no Copilot buffers exist, signal a user error.  The selected buffer
+is displayed the same way new Copilot buffers are (respecting
+`copilot-side-window-width')."
   (interactive)
   (let* ((candidates (seq-filter (lambda (b)
                                    (string-match-p "^\\*Copilot \\[[^]]+\\] - " (buffer-name b)))
@@ -229,8 +244,10 @@ If no Copilot buffers exist, signal a user error."
          (names (mapcar #'buffer-name candidates)))
     (unless names
       (user-error "No Copilot buffers"))
-    (let* ((choice (completing-read "Copilot buffer: " names nil t)))
-      (switch-to-buffer choice))))
+    (let* ((choice (completing-read "Copilot buffer: " names nil t))
+           (buf (get-buffer choice)))
+      (copilot--display-buffer buf))))
+
 
 ;;;###autoload
 (defun copilot/new (prompt)
