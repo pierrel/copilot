@@ -82,6 +82,9 @@ Returns the window used."
     (or (ignore-errors (projectile-project-root)) default-directory))
    (t default-directory)))
 
+(defun copilot--project-name ()
+  (file-name-nondirectory (directory-file-name (copilot--project-root))))
+
 (defun copilot--truncate-words (s n)
   (let* ((words (split-string s "[\n\r\t ]+" t))
          (head (seq-take words n)))
@@ -89,7 +92,7 @@ Returns the window used."
 
 (defun copilot--buffer-name (prompt)
   (format "*Copilot [%s] - %s*"
-          (file-name-nondirectory (directory-file-name (copilot--project-root)))
+	  (copilot--project-name)
           (copilot--truncate-words prompt 10)))
 
 (defun copilot--current-session-id (buffer)
@@ -247,6 +250,22 @@ is displayed the same way new Copilot buffers are (respecting
     (let* ((choice (completing-read "Copilot buffer: " names nil t))
            (buf (get-buffer choice)))
       (copilot--display-buffer buf))))
+
+;;;###autoload
+(defun copilot/open ()
+  "Select and display all copilot buffers stacked in a side window
+Buffers are recognized by the naming pattern produced by `copilot--buffer-name' and is further refined by the project name. If no Copilot buffers exist within the project, then prompts for a new input (using `copilot/new')"
+  (interactive)
+  (let* ((project (copilot--project-name))
+	 (candidates (seq-filter (lambda (b)
+                                   (string-match-p (format "^\\*Copilot \\[%s\\] - "
+							   project)
+						   (buffer-name b)))
+                                 (buffer-list)))
+         (names (mapcar #'buffer-name candidates)))
+    (unless names
+      (user-error "No Copilot buffers for project %s" project))
+    (message "Got buffers %s" names)))
 
 
 ;;;###autoload
