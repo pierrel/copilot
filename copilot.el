@@ -47,7 +47,6 @@
 
 ;; Session id is discovered from the single log file in a temp --log-dir.
 ;; Stored in buffer as a global file property '#+property: copilot-session-id <id>'.
-(defvar-local copilot--log-dir nil)
 (defconst copilot--ai-begin "#+begin_ai\n")
 (defconst copilot--ai-end   "#+end_ai\n")
 (defcustom copilot-side-window-width 0.25
@@ -127,6 +126,16 @@ Returns the window used."
 (defun copilot--set-session-id (buffer id)
   (with-current-buffer buffer
     (org-set-property "copilot--session-id" id)))
+
+
+(defun copilot--current-log-dir (buffer)
+  (with-current-buffer buffer
+    (when (derived-mode-p 'org-mode)
+      (org-entry-get (point) "copilot--log-dir"))))
+
+(defun copilot--set-log-dir (buffer dir)
+  (with-current-buffer buffer
+    (org-set-property "copilot--log-dir" dir)))
 
 (defun copilot--insert-new-user-prompt (buf prompt)
   (with-current-buffer buf
@@ -218,8 +227,10 @@ Returns the window used."
 
 (defun copilot--start-process (prompt buf resume-id)
   (let* ((default-directory (copilot--project-root))
-         (log-dir (or copilot--log-dir
-                      (setq copilot--log-dir (copilot--make-temp-log-dir))))
+         (log-dir (or (copilot--current-log-dir buf)
+                      (let ((new (copilot--make-temp-log-dir)))
+                        (copilot--set-log-dir buf new)
+                        new)))
          (cmd (copilot--build-command prompt resume-id log-dir))
          (proc (apply #'start-process "copilot-cli" buf cmd)))
     (message (format "Calling copilot like =%s=" cmd))
