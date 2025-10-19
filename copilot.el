@@ -59,6 +59,30 @@ Set to nil to disable special side-window display."
                  (integer :tag "Columns")
                  (const :tag "Disabled" nil)))
 
+(defun copilot--display-buffers (bufs)
+  "Display one or more BUFS in right side window(s).
+Honors `copilot-side-window-width'. When multiple buffers are
+supplied they share the same right-side column and are stacked
+vertically in the order provided. Returns the window displaying
+the last buffer."
+  (let ((bufs (seq-remove #'null bufs)))
+    (when bufs
+      (if (null copilot-side-window-width)
+          (progn
+            (switch-to-buffer (car (last bufs)))
+            (get-buffer-window (car (last bufs))))
+        (let* ((fw (frame-width))
+               (cols (if (floatp copilot-side-window-width)
+                         (max 20 (truncate (* fw copilot-side-window-width)))
+                       copilot-side-window-width)))
+          (dolist (b bufs)
+            (or (get-buffer-window b)
+                (display-buffer-in-side-window
+                 b `((side . right)
+                     (slot . -1)
+                     (window-width . ,cols)
+                     (preserve-size . (t . nil)))))))))))
+
 (defun copilot--display-buffer (buf)
   "Display BUF in a right side window honoring `copilot-side-window-width'.
 Returns the window used."
@@ -261,11 +285,11 @@ Buffers are recognized by the naming pattern produced by `copilot--buffer-name' 
                                    (string-match-p (format "^\\*Copilot \\[%s\\] - "
 							   project)
 						   (buffer-name b)))
-                                 (buffer-list)))
-         (names (mapcar #'buffer-name candidates)))
-    (unless names
-      (user-error "No Copilot buffers for project %s" project))
-    (message "Got buffers %s" names)))
+                                 (buffer-list))))
+    (unless candidates
+      (message "No Copilot buffers for project %s - showing selection" project)
+      (call-interactively copilot/select))
+    (copilot--display-buffers candidates)))
 
 
 ;;;###autoload
