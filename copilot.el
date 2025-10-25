@@ -80,7 +80,10 @@ the last buffer."
                  b `((side . right)
                      (slot . -1)
                      (window-width . ,cols)
-                     (preserve-size . (t . nil)))))))))))
+                     (preserve-size . (t . nil))
+                     (window-parameters . ((no-delete-other-windows . t))))))))))))
+
+
 
 (defun copilot--display-buffer (buf)
   "Display BUF in a right side window honoring `copilot-side-window-width'.
@@ -97,7 +100,8 @@ Returns the window used."
 	 buf `((side . right)
                (slot . -1)
                (window-width . ,cols)
-               (preserve-size . (t . nil))))))))
+               (preserve-size . (t . nil))
+               (window-parameters . ((no-delete-other-windows . t)))))))))
 
 (defun copilot--project-root ()
   (cond
