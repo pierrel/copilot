@@ -273,16 +273,18 @@ Returns the window used."
        (copilot--current-session-id buf)))
 
 ;;;###autoload
-(defun copilot/select ()
+(defun copilot/select (&optional given-candidates)
   "Select an existing Copilot buffer using standard buffer completion.
 Buffers are recognized by the naming pattern produced by `copilot--buffer-name'.
 If no Copilot buffers exist, signal a user error.  The selected buffer
 is displayed the same way new Copilot buffers are (respecting
 `copilot-side-window-width')."
   (interactive)
-  (let* ((candidates (seq-filter (lambda (b)
-                                   (string-match-p "^\\*Copilot \\[[^]]+\\] - " (buffer-name b)))
-                                 (buffer-list)))
+  (let* ((candidates (if given-candidates
+			 given-candidates
+		       (seq-filter (lambda (b)
+                                     (string-match-p "^\\*Copilot \\[[^]]+\\] - " (buffer-name b)))
+                                   (buffer-list))))
          (names (mapcar #'buffer-name candidates)))
     (unless names
       (user-error "No Copilot buffers"))
@@ -304,8 +306,9 @@ Buffers are recognized by the naming pattern produced by `copilot--buffer-name' 
     (unless candidates
       (message "No Copilot buffers for project %s - showing selection" project)
       (call-interactively copilot/select))
-    (copilot--display-buffers candidates)))
-
+    (if (> (length candidates) 1)
+	(copilot/select candidates)
+      (copilot--display-buffer (nth 0 candidates)))))
 
 ;;;###autoload
 (defun copilot/new (prompt)
