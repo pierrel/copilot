@@ -46,6 +46,12 @@ When invoked for the first time, it will:
 If invoked from a buffer that has a "copilot-session-id", then it uses the =--resume= with the session ID and puts the new user prompt after the last AI message/block and then begins a new block with the response.
 
 * Installation
+For development tasks, this project now uses Eldev. Common commands:
+- =eldev deps=: install dev/test dependencies
+- =eldev test=: run ERT tests
+- =eldev lint=: run checkers
+- =eldev compile=: byte-compile
+
 Add this repository to your load path and require it. Example using straight.el:
 #+begin_src emacs-lisp
 (use-package copilot

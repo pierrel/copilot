@@ -1,0 +1,14 @@
+;; Eldev project configuration
+;; See https://github.com/doublep/eldev for syntax details.
+(eval-and-compile
+  (unless (fboundp 'package)
+    (defmacro package (&rest _spec) nil)))
+
+(package
+ (name "copilot")
+ (version "0.0.1")
+ (summary "Emacs interface for GitHub Copilot CLI chat")
+ ;; Runtime dependencies (add as needed):
+ (depends-on "emacs")
+ ;; Development/test dependencies:
+ (dev-depends-on "ert"))

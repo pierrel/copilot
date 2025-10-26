@@ -20,6 +20,7 @@
 ;;; Code:
 (require 'subr-x)
 (require 'org)
+(require 'seq)
 
 (defgroup copilot-cli nil
   "Copilot CLI Emacs integration."
