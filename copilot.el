@@ -132,6 +132,12 @@ Returns the window used."
   (with-current-buffer buffer
     (org-set-property "copilot--session-id" id)))
 
+;; Return the path of the current buffer file relative to the project root.
+(defun copilot--relative-file-path ()
+  (let* ((root (copilot--project-root))
+         (file (buffer-file-name)))
+    (when (and root file (file-in-directory-p file root))
+      (file-relative-name file root))))
 
 (defun copilot--current-log-dir (buffer)
   (with-current-buffer buffer
@@ -316,7 +322,11 @@ Buffers are recognized by the naming pattern produced by `copilot--buffer-name' 
   "Start or continue a Copilot chat session with PROMPT.
 When called from an existing Copilot buffer (has session id), the
 session is resumed via --resume.  Otherwise a new chat is started."
-  (interactive (list (read-string "Copilot prompt: ")))
+  (interactive (list (read-string "Copilot prompt: "
+				  (let ((rel (copilot--relative-file-path)))
+				    (if rel
+					(format "See file %s" rel)
+				      "")))))
   (let* ((sid (copilot--current-session-id (current-buffer)))
 	 (buf (if sid
 		  (current-buffer)
